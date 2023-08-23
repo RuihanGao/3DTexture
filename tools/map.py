@@ -131,9 +131,17 @@ def calculate_tbn(mesh, uvs, force_orthogonal=True):
     faces_uvs_edges = faces_uvs[:, 1:] - faces_uvs[:, :1]  # M, 2, 2
     # Check singular issue
     rank = np.linalg.matrix_rank(faces_uvs_edges)
+
+    # Added by RH. somehow using GelSight data introduces singular issue with rank=0
+    if rank.min() == 0:
+        idx = np.where(rank == 0)[0]
+        faces_uvs_edges[idx, 0, 0] += 1e-3
+        rank = np.linalg.matrix_rank(faces_uvs_edges)
+
     if rank.min() < 2:
         idx = np.where(rank < 2)[0]
         faces_uvs_edges[idx, 1, 1] += 1e-3
+        rank = np.linalg.matrix_rank(faces_uvs_edges)
     # Calculate tbn
     faces_tb = np.einsum("mab,mbc->mac", np.linalg.inv(faces_uvs_edges), faces_verts_edges)  # M, 2, 3
     faces_tbn = np.concatenate([faces_tb, normals[:, None]], axis=1)  # M, 3, 3
@@ -165,7 +173,6 @@ def sample_patches_from_GelSight(
 
     # parameter settings: (used to set when initializing the class MeshFeatureField)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    pattern_rate = 1.0 / 50.0
 
     # Load template mesh and determine grid gap
 
@@ -189,10 +196,7 @@ def sample_patches_from_GelSight(
     # Set up the raytracer
     # For GelSight data, the mesh for sample is the plane mesh
     # cast_on_mfs determines whether cast on mesh_for_sample or not
-    raytracer = RayTracer(mesh_for_sample.vertices, mesh_for_sample.faces)
-
-    # Estimate template normals for projection
-    mesh_for_sample.as_open3d.compute_vertex_normals()
+    # raytracer = RayTracer(mesh_for_sample.vertices, mesh_for_sample.faces)
 
     # Sample patches along the surface of template mesh
     print("Getting patches from curved surface ...")
@@ -214,7 +218,7 @@ def sample_patches_from_GelSight(
 
     # NOTE: RH: start modification from here
     # input data: gs_data, npz file
-    # gs_data(gs_images=gs_images, vertices=vertices)
+    # gs_data(gs_images=gs_images, vertices=vertices, gx=gx, gy=gy)
     gs_data = np.load("gs_data.npz")
 
     encoder, encoder_out_dim = get_encoder(
@@ -285,23 +289,27 @@ def sample_patches_from_GelSight(
         # For GelSight data, the coarse normal always points upward, so p_sur (x_c) has the same x, y coordinates as x, but 0 for y coordinates
         p_sur = intersections.clone()
         p_sur[:, 1] = 0.0
-        
-        normal = np.array([[0.0, 0.0, 1.0]])  # TODO:  should be local normal computed from GelSight data
-        # you also need frnn (fixed radiance nearest neighbor) to find the nearest point on GelSight mesh
-        # https://github.com/lxxue/FRNN/blob/master/README.md
-        local_tbn = np.eye(3)
+        # compute local normal from GelSight data
+        gx = gs_data["gx"]
+        gy = gs_data["gy"]
+        scale_nz = 1  # correct conversion should be 1, but in practice we may downscale nz to see more subtle details
+        normal = np.concatenate([gx, gy, scale_nz * np.ones_like(gx)], axis=1)
+
+        # function of tbn: convert normal map in tangent space to normal map in world space
+        # For GelSight data, the base mesh is flat, so the normal map in tangent space is the same as normal map in world space
+        local_tbn = np.eye(3).unsqueeze(0).repeat(len(p_sur), 1, 1)
 
         # Embed surface coordinates with hash grid
         patch = encoder(p_sur, bound=1)
         patches[count] = patch.detach().cpu().numpy().reshape([patch_size, patch_size, -1])
         patch_local_tbn[count] = local_tbn.cpu().numpy().reshape([patch_size, patch_size, 9])
         patch_coors[count] = intersections.cpu().numpy().reshape([patch_size, patch_size, 3])
-
         patch_norms[count] = z_axis
         if not type(T) == np.ndarray:
             T = T.cpu().numpy()
         patch_sample_tbn[count] = T[:3, :3].T.reshape([9])
         picked_vertices[count] = vertices[i]
+
         if record_rays:
             if not type(ray_origins) == np.ndarray:
                 ray_origins = ray_origins.cpu().numpy()
@@ -667,7 +675,9 @@ class MeshProjector:
         # if requires_grad_xyz:
         #     return project_layer.apply(xyz, self.knn, self.raytracer.trace, K, self.depth_threshold, h_threshold)
         # else:
-        normal, _, _, _ = self.knn(xyz=xyz, K=K, use_dir_vec=use_dir_vec) # find knn, compute weighted coarse mesh normal n_c of query point x
+        normal, _, _, _ = self.knn(
+            xyz=xyz, K=K, use_dir_vec=use_dir_vec
+        )  # find knn, compute weighted coarse mesh normal n_c of query point x
         p_sur_1, _, depth_1, face_idx_1 = self.raytracer.trace(xyz, normal)  # inner
         p_sur_2, _, depth_2, face_idx_2 = self.raytracer.trace(xyz, -normal)  # outer
         condition = depth_1 < depth_2

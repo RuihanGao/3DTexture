@@ -18,17 +18,23 @@ quilt = False  # Warning! For structured textures, quilting may cause deformatio
 def transform(data, pca, bounds):
     x = data.reshape([-1, data.shape[-1]])
     x_pca = pca.transform(x)[..., -3:]
-    x_bd = (x_pca - bounds[0]) / (bounds[1] - bounds[0])
+    x_bd = (x_pca - bounds[0]) / (bounds[1] - bounds[0] + 1e-6) # Note: RH: add 1e-6 to avoid division by zero
     x_bd = np.clip(x_bd, 0., 1.)
     x_bd = x_bd.reshape([*data.shape[:-1], x_bd.shape[-1]])
     return x_bd
 
 
 def get_transform(data, dim):
+    # print(f"In function get_transform: data shape {data.shape}")
     x = data.reshape([-1, data.shape[-1]])[..., :dim]
+    # print(f"x shape {x.shape}, min {np.min(x)} max {np.max(x)}")
     pca = PCA(n_components=3)
     pca.fit(x)
     x_pca = pca.transform(x)[..., -3:]
+    # print(f"x_pca {x_pca.shape}, min {x_pca.min(axis=0)} max {x_pca.max(axis=0)}")
+    # x shape (32047104, 16), min -9.95844166027382e-05 max 9.927829523803666e-05
+    # x_pca (32047104, 3), min [-0.00013676 -0.00012386 -0.00012741] max [0.00014764 0.00012614 0.00013855]
+
     bounds = np.stack([x_pca.min(axis=0), x_pca.max(axis=0)])
     trans_func = lambda a: transform(a[..., :dim], pca=pca, bounds=bounds)
     return trans_func
@@ -219,7 +225,7 @@ class patchBasedTextureSynthesis:
         
     def distances2probability(self, distances, PARM_truncation, PARM_attenuation):
 
-        probabilities = 1 - distances / np.max(distances)  
+        probabilities = 1 - distances / np.max(distances + 1e-6) # Note: RH: add 1e-6 to avoid division by zero
         probabilities /= np.sum(probabilities) # normalize so they add up to one  
         probabilities *= (probabilities > PARM_truncation)
         probabilities = pow(probabilities, PARM_attenuation) #attenuate the values
@@ -440,18 +446,26 @@ class patchBasedTextureSynthesis:
 if __name__ == '__main__':
     #PARAMS
     ########################################################################################
-    # if not sure just check the logs directory of NeRF-Texture
-    DATA_NAME =  'my_brown_box' # 'my_white_lamp_base' # 'durian'   # 'test'
-    MODEL_NAME = 'curved_grid_hash_clus_optcam_SH'
-    data_path = f'./logs/{DATA_NAME}/field/'
+    # # if not sure just check the logs directory of NeRF-Texture
+    # DATA_NAME =  'my_brown_box' # 'my_white_lamp_base' # 'durian'   # 'test'
+    # MODEL_NAME = 'curved_grid_hash_clus_optcam_SH'
+    # data_path = f'./logs/{DATA_NAME}/field/'
+
+    # change path here to test proof-of-concept for GelSight data
+    DATA_NAME = 'test_data'
+    MODEL_NAME = 'curved_grid_hash'
+    data_path = f'./ideas/{DATA_NAME}/field/'
+
+
     save_path = data_path
     ########################################################################################
     data = np.load(f'{data_path}/{MODEL_NAME}.npz', allow_pickle=True)
-    patches = data['patches']
+    patches = data['patches'] # (50, 128, 128, 16), range [0, 0]
     patch_idx = np.arange(patches.shape[0])  #[::4]
     patches = patches[patch_idx]
     grid_gap = data['grid_gap']
     match_dim = data['patches'].shape[-1]
+    print(f"check match_dim {match_dim} {data['patches'].shape} patches {patches.shape} min {np.min(patches)} max {np.max(patches)}")
 
     if 'patch_phi_embed' in data.keys() and data['patch_phi_embed'].ndim > 0:
         phi_embed_dim = data['patch_phi_embed'].shape[-1]
@@ -459,13 +473,24 @@ if __name__ == '__main__':
     else:
         phi_embed_dim = 0
 
+    print(f"check phi_embed_dim {phi_embed_dim}")
+
     if 'patch_local_tbn' in data.keys() and data['patch_local_tbn'].ndim > 0:
         patches = np.concatenate([patches, data['patch_local_tbn'][patch_idx]], axis=-1)
     
     patch_length = patches.shape[1] * grid_gap
     picked_vertices = data['picked_vertices'][patch_idx]
 
-    print('Patches shape: ', patches.shape)
+    print(f"Patches shape: {patches.shape}, range: {np.min(patches)}, {np.max(patches)}") # (50, 128, 128, 25), range [-1.0, 1.0]
+
+    # # RH: compute histogram for debugging
+    # import matplotlib.pyplot as plt
+    # _ = plt.hist(patches.flatten(), bins='auto')  # arguments are passed to np.histogram
+    # plt.title("Histogram with 'auto' bins")
+    # plt.savefig(f'{save_path}/{DATA_NAME}_{MODEL_NAME}_hist.png')
+    # plt.close()
+
+
     B, H, W = patches.shape[:3]
 
     # Options
@@ -484,6 +509,7 @@ if __name__ == '__main__':
         patchSize -= 1
     overlapSize = int((H-patchSize)/2) #the width of the overlap region
 
+    print(f"run patchBasedTextureSynthesis...")
     pbts = patchBasedTextureSynthesis(patches, outputPath, outputSize, patchSize, overlapSize, in_windowStep = 5, in_mirror_hor = in_mirror_hor, in_mirror_vert = in_mirror_vert, rotate=False, in_shapshots=True, picked_vertices=picked_vertices, patch_length=patch_length, coarse_KDtree=True, sample_tbn=data['patch_sample_tbn'], match_dim=match_dim, strict_match=strict_match, mode=mode)
     canvas, canvas_id = pbts.resolveAll()
 
