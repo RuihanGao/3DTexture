@@ -4,3 +4,5 @@ logs/*
 thirdparty/*
 */logs/*
 */test_data/*
+**.ply
+**.obj

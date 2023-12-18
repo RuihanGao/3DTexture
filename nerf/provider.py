@@ -264,6 +264,7 @@ class NeRFDataset:
                 self.poses.append(pose)
                 self.images.append(image)
                 self.f_paths.append(f_path)
+
         
         self.poses = np.stack(self.poses, axis=0)
         if self.normalize:

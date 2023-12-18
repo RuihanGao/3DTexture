@@ -189,6 +189,8 @@ class NeRFRenderer(nn.Module):
         # bg_color: [3] in range [0, 1]
         # return: image: [B, N, 3], depth: [B, N]
 
+        print(f"In function run in renderer.py ...")
+
         prefix = rays_o.shape[:-1]
         rays_o = rays_o.contiguous().view(-1, 3)
         rays_d = rays_d.contiguous().view(-1, 3)
@@ -339,6 +341,8 @@ class NeRFRenderer(nn.Module):
         # rays_o, rays_d: [B, N, 3], assumes B == 1
         # return: image: [B, N, 3], depth: [B, N]
 
+        print(f"In function run_cuda in renderer.py ...")
+
         prefix = rays_o.shape[:-1]
         rays_o = rays_o.contiguous().view(-1, 3)
         rays_d = rays_d.contiguous().view(-1, 3)
@@ -370,10 +374,12 @@ class NeRFRenderer(nn.Module):
                 xyzs, dirs, deltas, rays = raymarching.march_rays_train_differentiable(rays_o, rays_d, self.bound, self.density_bitfield, self.cascade, self.grid_size, nears.detach(), fars.detach(), counter, self.mean_count, perturb, 128, force_all_rays, dt_gamma, max_steps)
             else:
                 xyzs, dirs, deltas, rays = raymarching.march_rays_train(rays_o, rays_d, self.bound, self.density_bitfield, self.cascade, self.grid_size, nears, fars, counter, self.mean_count, perturb, 128, force_all_rays, dt_gamma, max_steps)
+            
+            print(f"optimize_camera? {self.optimize_camera}, xyzs {xyzs.shape}") # False, [2412288, 3]
 
             #plot_pointcloud(xyzs.reshape(-1, 3).detach().cpu().numpy())
             frame_index = kwargs['index'] if 'index' in kwargs.keys() else None
-            sigmas, rgbs, data_dict = self(xyzs, dirs, frame_index=frame_index)
+            sigmas, rgbs, data_dict = self(xyzs, dirs, frame_index=frame_index) # see function forward() in network_curvefield.py / network_tcnn.py (inherit NeRFRenderer class, use **kwargs)
             sigmas = self.density_scale * sigmas
 
             # if self.cal_dist_loss:
@@ -490,6 +496,11 @@ class NeRFRenderer(nn.Module):
             depth = depth.view(*prefix)
         mask = (weights_sum > .95).view(*prefix)
 
+        # print(f"Before returning the result, check the output modalities")
+        # print(f"depth {depth.shape}, image {image.shape}, mask {mask.shape}, distortion_loss {distortion_loss}, render_data_dict {render_data_dict.keys()}") # [1, 4096], [1, 4096, 3], [1, 4096], None, []
+        # print(f"check range depth min {torch.min(depth)} max {torch.max(depth)}, image min {torch.min(image)} max {torch.max(image)}, mask min {torch.min(mask)} max {torch.max(mask)} ") #  depth min 0.18129420280456543 max 0.20567390322685242, image min 0.4058132469654083 max 0.6488909125328064, mask min False max False 
+
+        # raise ValueError(f"check the output of run_cuda function")
         return {
             'depth': depth,
             'image': image,
@@ -665,6 +676,7 @@ class NeRFRenderer(nn.Module):
     def render(self, rays_o, rays_d, staged=False, max_ray_batch=4096, force_staged=False, **kwargs):
         # rays_o, rays_d: [B, N, 3], assumes B == 1
         # return: pred_rgb: [B, N, 3]
+        print(f"In function render ...")
 
         if self.cuda_ray:
             _run = self.run_cuda

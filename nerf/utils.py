@@ -588,8 +588,12 @@ class Trainer(object):
         
         distillation_prob = .75
         rand_x = np.random.rand()
+
+        print(f"In function train_step, check data format...")
         if self.distillation and rand_x < distillation_prob:
+            print(f"Run distillation process")
             xyzs, dirs, _, _, prefix = self.model.sample(rays_o, rays_d, **vars(self.opt))
+            print(f"check xyzs shape {xyzs.shape}, dirs shape {dirs.shape}, prefix {prefix}")
             sigmas, rgbs, _ = self.model(xyzs, dirs, frame_index=index)
             sigmas_t, rgbs_t, _ = self.teacher_model(xyzs, dirs)
             lambda_ = 1.
@@ -599,6 +603,7 @@ class Trainer(object):
             pred_rgb = rgbs[0]
             gt_rgb = rgbs_t[0]
         else:
+            print(f"Skipped distillation, run direct supervision")
             images = data['images'] # [B, N, 3/4]
             B, N, C = images.shape
             if self.opt.color_space == 'linear':
@@ -612,7 +617,10 @@ class Trainer(object):
                 gt_rgb = images[..., :3] * images[..., 3:] + bg_color * (1 - images[..., 3:])
             else:
                 gt_rgb = images
+            print(f"check gt_rgb shape {gt_rgb.shape}") # [1, 4096, 3]
+            print(f"run self.model.render...")
             outputs = self.model.render(rays_o, rays_d, staged=False, bg_color=bg_color, perturb=True, force_all_rays=False, index=index, **vars(self.opt))
+            print(f"check outputs keys {outputs.keys()}") # (['depth', 'image', 'mask', 'distortion_loss']
             pred_rgb = outputs['image']
             rgb_loss = self.criterion(pred_rgb, gt_rgb).mean(-1) # [B, N, 3] --> [B, N]
             # special case for CCNeRF's rank-residual training
@@ -630,7 +638,7 @@ class Trainer(object):
                 error_map.scatter_(1, inds, ema_error)
                 # put back
                 self.error_map[index] = error_map
-            # sparse_loss = self.model.random_density(dtype=rgb_loss.dtype, device=rgb_loss.device).mean()
+            # sparse_loss = f.random_density(dtype=rgb_loss.dtype, device=rgb_loss.device).mean()
             distortion_loss = outputs['distortion_loss']
             if distortion_loss is None:
                 distortion_loss = 0.
@@ -664,6 +672,8 @@ class Trainer(object):
                 nan_mask = torch.logical_not(outputs['normal_error'][0].isnan().any(dim=-1))
                 normal_error = 1e-1 * outputs['normal_error'][0][nan_mask].mean() + normal_error
             loss = rgb_loss.mean() + 1e-2 * distortion_loss + regular_loss + normal_error + gamma_loss
+
+        # raise ValueError(f"Finish training one step, stop here to check")
 
         return pred_rgb, gt_rgb, loss
 
@@ -1319,7 +1329,7 @@ class Trainer(object):
                 with torch.cuda.amp.autocast(enabled=self.fp16):
                     self.model.update_extra_state()
                         
-            if self.update_gridfield:
+            if self.update_gridfield and hasattr(self.model, 'update_gridfield'):
                 self.model.update_gridfield(target_stage=int(self.global_step // self.num_iterations_per_stage))        
                 self.update_optimizer_scheduler()
             

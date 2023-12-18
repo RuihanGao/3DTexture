@@ -7,10 +7,10 @@ PATH_TO_DATASET = 'data' # 'PATH_TO_DATASET'
 # pattern_rate = 1 / 8 # 1 / 8  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
 
 #########################################################
-DATA_NAME = 'my_brown_box'
-surface_type = 'coacd_remesh'
-coacd_threshold = .1
-pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
+# DATA_NAME = 'my_brown_box'
+# surface_type = 'coacd_remesh'
+# coacd_threshold = .1
+# pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
 
 
 #########################################################
@@ -40,3 +40,16 @@ pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to th
 # # opt.preload = False
 # light_model = 'None'
 # dir_degree = 0
+
+#########################################################
+# DATA_NAME = 'my_purple_apple_optitrack'
+# surface_type = 'coacd_remesh'
+# coacd_threshold = .1
+# pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
+
+
+#########################################################
+DATA_NAME = 'my_purple_apple_colmap'
+surface_type = 'coacd_remesh'
+coacd_threshold = .1
+pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length

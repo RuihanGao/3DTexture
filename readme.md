@@ -296,7 +296,7 @@ To apply the synthesized texture to a shape, first place a 'target.obj' file int
         Note = {https://github.com/ashawkey/torch-ngp},
         Title = {Torch-ngp: a PyTorch implementation of instant-ngp}
     }
-    ```
+    ```===
 
 
 * Credits to [Thomas Müller](https://tom94.net/) for the exceptional [tiny-cuda-nn](https://github.com/NVlabs/tiny-cuda-nn) and [instant-ngp](https://github.com/NVlabs/instant-ngp):
@@ -386,11 +386,19 @@ pip install opencv-python-headless
 
 ## Sample command
 * Coarse shape estimation <br> 
+- `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_pink_dumbbell/ --workspace ./logs/my_pink_dumbbell -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
+- `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_purple_apple_colmap/ --workspace ./logs/my_purple_apple_colmap -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
+- `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_purple_apple_optitrack/ --workspace ./logs/my_purple_apple_optitrack -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_white_lamp_base/ --workspace ./logs/my_white_lamp_base -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/durian/ --workspace ./logs/durian -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_luffa/ --workspace ./logs/my_luffa -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui --mesh_resolution 1024`
 
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_brown_box/ --workspace ./logs/my_brown_box -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui --mesh_resolution 1024`
+
+
+
+- try to run without GUI for easier debugging from remote
+`CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_brown_box/ --workspace ./logs/my_brown_box -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --mesh_resolution 1024`
 
 
 * Train NeRF-Texture `CUDA_VISIBLE_DEVICES=0 python main.py` <br>

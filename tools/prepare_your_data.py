@@ -10,12 +10,12 @@ from scipy import optimize
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
-
+import json
 
 MIVOS_PATH='/data/ruihan/projects/NeRF-Texture/thirdparty/MiVOS/' # 'PATH_TO_MIVOS' # https://github.com/hkchengrex/MiVOS
 sys.path.append(MIVOS_PATH)
 from interactive_invoke import seg_video
-from colmap2nerf import colmap2nerf_invoke
+from colmap2nerf import colmap2nerf_invoke, optitrack2nerf_invoke
 
 
 def Laplacian(img):
@@ -128,37 +128,113 @@ def extract_frames_mp4(path, gap=5, sv_path=None):
 
 def rename_images(path):
     image_names = sorted(os.listdir(path))
-    image_names = [img for img in image_names if img.endswith('.png') or img.endswith('.jpg')]
-    for i in range(len(image_names)):
-        shutil.move(path + '/' + image_names[i], path + '/%05d.png' % i)
+    org_image_names = [img for img in image_names if img.endswith('.png') or img.endswith('.jpg')]
+    new_image_names = ['%05d.png' % i for i in range(len(org_image_names))]
+    for i in range(len(org_image_names)):
+        shutil.move(path + '/' + org_image_names[i], path + new_image_names[i])
+    return org_image_names, new_image_names
 
 
 if __name__ == '__main__':
-    gap = 15
-    no_mask = False
+    gap = 8 # default 15. change to 1 to debug my_purple_apple
     path_to_dataset = '/data/ruihan/projects/NeRF-Texture/data' # 'PARENT_FOLDER'
-    dataset_name = 'my_brown_box' # 'DATASET_NAME'
-    video_path = f'{path_to_dataset}/{dataset_name}/{dataset_name}.mp4'
-    if not os.path.exists(video_path):
-        video_path = video_path[:-3] + 'mp4'
-    print('Extracting frames from video: ', video_path, ' with gap: ', gap)
-    img_path = extract_frames_mp4(video_path, gap=gap)
-    print('Removing Blurry Images')
-    laplace, _ = select_blur_images(img_path, nb=10, threshold=0.8, mv_files=True)
-    if laplace is not None:
-        rename_images(img_path)
+    dataset_name = 'dumbbell_20231207_obj_frame' # 'DATASET_NAME'
+    input_video = False
+    use_optitrack = True
+    remove_blur = False
+    no_mask = True
+    process_poses = True
+    
+    # Step 1. Extract all images
+    if input_video:
+        video_path = f'{path_to_dataset}/{dataset_name}/{dataset_name}.mp4'
+        if not os.path.exists(video_path):
+            video_path = video_path[:-3] + 'mp4'
+        print('Extracting frames from video: ', video_path, ' with gap: ', gap)
+        img_path = extract_frames_mp4(video_path, gap=gap)
+    else:
+        img_path = f'{path_to_dataset}/{dataset_name}/images/'
+    
+    obj_dir = f'{path_to_dataset}/{dataset_name}/'
+    
+    # Step 2. Remove blurry images
+    laplace = None
+    if remove_blur:
+        print('Removing Blurry Images')
+        laplace, _ = select_blur_images(img_path, nb=10, threshold=0.8, mv_files=True)
+        # Rename the images here so that the images match the mask names. See L338 in tools/interactive_invoke.py
+        if laplace is not None:
+            org_image_names, new_image_names = rename_images(img_path)
+            filename_mapping = dict(zip(org_image_names, new_image_names))
+
+    # Step 3. Segment images with MiVOS and mask images
     if not no_mask:
         print('Segmenting images with MiVOS ...')
         msk_path = seg_video(img_path=img_path, MIVOS_PATH=MIVOS_PATH)
         torch.cuda.empty_cache()
         print('Masking images with masks ...')
         msked_path = mask_images(img_path, msk_path, no_mask=no_mask)
-    print('Running COLMAP ...')
-    colmap2nerf_invoke(img_path)
-    if img_path.endswith('/'):
-        img_path = img_path[:-1]
-    unmsk_path = '/'.join(img_path.split('/')[:-1]) + '/unmasked_images/'
-    print('Rename masked and unmasked pathes.')
-    if not no_mask:
-        os.rename(img_path, unmsk_path)
-        os.rename(msked_path, img_path)
+
+    # Step 4. Process poses and output transforms.json, where the coordinates follow NeRF convention
+    if process_poses:
+        # RH: if you use optitrack data, we need to update transforms.py accordingly.  remove noisy frames, rename clean frames, and change file format from .jpg to .png
+        if use_optitrack:
+            json_path = "transforms_optitrack.json"
+            if os.path.exists(os.path.join(obj_dir, json_path)):
+                # delete the previous json file
+                os.remove(os.path.join(obj_dir, json_path))
+
+            if remove_blur:
+                # we import the images_all.txt and process it to a clean txt file which only include non-noisy frames
+                img_all_txt = f'{path_to_dataset}/{dataset_name}/images_all.txt'
+                assert os.path.exists(img_all_txt), f'{img_all_txt} does not exist.'
+
+                if laplace is not None:
+                    # filter out noisy frames
+                    print('Removing noisy frames from json data')
+                    amb_imgs = [x.split('/')[-1] for x in laplace]
+                else:
+                    amb_imgs = []
+
+                clean_lines = []
+
+                with open(img_all_txt, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line[0] == '#':
+                            # add the same text to clean_lines. The number of images could change, but it doesn't matter much
+                            clean_lines.append(line)
+                            continue
+                        img_name = line.split(' ')[-1]
+                        print(f"example img_name: {img_name}")
+                        # remove the line if the img_name occurs in amb_imgs
+                        if img_name in amb_imgs:
+                            continue
+                        # rename the frame file_path based on filename_mapping
+                        new_img_name = filename_mapping[img_name]
+                        new_line = line.replace(img_name, new_img_name)
+                        clean_lines.append(new_line)
+                # save to new txt file
+                img_text = img_all_txt.replace('images_all', 'images')
+                with open(img_text, 'w') as f:
+                    for line in clean_lines:
+                        f.write(line + '\n')
+            print(f"Running optitrack2nerf_invoke")
+            optitrack2nerf_invoke(img_path, obj_dir=obj_dir, img_txt_path="images.txt" if remove_blur else "images_all.txt", json_path=json_path)
+
+        else:
+            json_path = "transforms_colmap.json"
+            if os.path.exists(os.path.join(obj_dir, json_path)):
+                # delete the previous json file
+                os.remove(os.path.join(obj_dir, json_path))
+            print('Running COLMAP ...')
+            colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path=json_path)
+
+        # (Optionally) Step 5. Rename masked and unmasked pathes
+        # if img_path.endswith('/'):
+        #     img_path = img_path[:-1]
+        # unmsk_path = '/'.join(img_path.split('/')[:-1]) + '/unmasked_images/'
+        # print('Rename masked and unmasked pathes.')
+        # if not no_mask:
+        #     os.rename(img_path, unmsk_path)
+        #     os.rename(msked_path, img_path)

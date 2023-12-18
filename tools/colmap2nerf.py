@@ -21,6 +21,7 @@ import math
 import cv2
 import os
 import shutil
+import copy
 
 def parse_args():
 	parser = argparse.ArgumentParser(description="convert a text colmap export to nerf format transforms.json; optionally convert video to images, and optionally run colmap in the first place")
@@ -34,7 +35,8 @@ def parse_args():
 	parser.add_argument("--text", default="colmap_text", help="input path to the colmap text files (set automatically if run_colmap is used)")
 	parser.add_argument("--aabb_scale", default=16, choices=["1","2","4","8","16"], help="large scene scale factor. 1=scene fits in unit cube; power of 2 up to 16")
 	parser.add_argument("--skip_early", default=0, help="skip this many images from the start")
-	parser.add_argument("--out", default="transforms.json", help="output path")
+	parser.add_argument("--img_txt_path", default="images.txt", help="path to the images txt file")
+	parser.add_argument("--json_path", default="transforms.json", help="path to the json file")
 	args = parser.parse_args()
 	return args
 
@@ -142,32 +144,13 @@ def closest_point_2_lines(oa, da, ob, db): # returns point closest to both rays 
 	return (oa+ta*da+ob+tb*db)*0.5,denom
 
 
-def colmap2nerf_invoke(img_path):
-	args = parse_args()
-	img_path = img_path[:-1] if img_path.endswith('/') else img_path
-	sv_path = '/'.join(img_path.split('/')[:-1])
-	args.images = img_path
-	args.colmap_matcher = "exhaustive"
-	args.run_colmap = True
-	args.aabb_scale = 16
-	args.text = sv_path + '/' + args.text
-	args.colmap_db = sv_path + '/' + args.colmap_db
-	AABB_SCALE=int(args.aabb_scale)
-	SKIP_EARLY=int(args.skip_early)
-	IMAGE_FOLDER=args.images
-	TEXT_FOLDER=sv_path + '/colmap_text'
-	OUT_PATH=sv_path + '/transforms.json'
-
-	if os.path.exists(OUT_PATH):
-		return
-	if args.video_in != "":
-		run_ffmpeg(args)
-	if args.run_colmap and not os.path.exists(os.path.join(TEXT_FOLDER,"cameras.txt")):
-		run_colmap(args, warning=False)
-	
-	print(f"outputting to {OUT_PATH}...")
-	with open(os.path.join(TEXT_FOLDER,"cameras.txt"), "r") as f:
+def obtain_camera_intrinsics_from_txt(cam_txt_folder, cam_txt_path="cameras.txt", aabb_scale=16):
+	"""
+	Process cameras.txt to obtain camera intrinsics
+	"""
+	with open(os.path.join(cam_txt_folder, cam_txt_path), "r") as f:
 		angle_x=math.pi/2
+		cam_count = 0
 		for line in f:
 			# 1 SIMPLE_RADIAL 2048 1536 1580.46 1024 768 0.0045691
 			# 1 OPENCV 3840 2160 3178.27 3182.09 1920 1080 0.159668 -0.231286 -0.00123982 0.00272224
@@ -202,49 +185,72 @@ def colmap2nerf_invoke(img_path):
 				k2 = float(els[9])
 				p1 = float(els[10])
 				p2 = float(els[11])
+			elif (els[1]=="REALSENSE"):
+				# Added for RealSense camera data
+				fl_y = float(els[5])
+				cx = float(els[6])
+				cy = float(els[7])
 			else:
 				print("unknown camera model ", els[1])
+			cam_count += 1
 			# fl = 0.5 * w / tan(0.5 * angle_x);
 			angle_x= math.atan(w/(fl_x*2))*2
 			angle_y= math.atan(h/(fl_y*2))*2
 			fovx=angle_x*180/math.pi
 			fovy=angle_y*180/math.pi
+	assert cam_count == 1, "Only one camera is supported for now."
+	print(f"Find {cam_count} cameras.\n\tres={w,h}\n\tcenter={cx,cy}\n\tfocal={fl_x,fl_y}\n\tfov={fovx,fovy}\n\tk={k1,k2} p={p1,p2} ")
+	cam_intrinsics={
+		"camera_angle_x":angle_x,
+		"camera_angle_y":angle_y,
+		"fl_x":fl_x,
+		"fl_y":fl_y,
+		"k1":k1,
+		"k2":k2,
+		"p1":p1,
+		"p2":p2,
+		"cx":cx,
+		"cy":cy,
+		"w":w,
+		"h":h,
+		"aabb_scale":aabb_scale,
+	}
+	return cam_intrinsics
 
-	print(f"camera:\n\tres={w,h}\n\tcenter={cx,cy}\n\tfocal={fl_x,fl_y}\n\tfov={fovx,fovy}\n\tk={k1,k2} p={p1,p2} ")
 
-	with open(os.path.join(TEXT_FOLDER,"images.txt"), "r") as f:
+def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt", num_line_per_frame=2, skip_early=0):
+	"""
+	Process images.txt to obtain camera poses
+	
+	Args:
+		img_txt_folder (str): path to the folder containing images.txt
+		img_txt_path (str): path to images.txt
+		num_line_per_frame (int): number of lines per frame in images.txt. Set to 2 for colmap output and 1 for optitrack output. Colmap has an additional line for 3D feature points.
+	
+	Returns:
+		cam_poses (list): list of camera poses
+	
+	"""
+	img_dict = {'frames': []}
+
+	# compute the transformation matrix
+	with open(os.path.join(img_txt_folder, img_txt_path), "r") as f:
 		i=0
 		bottom = np.array([0,0,0,1.]).reshape([1,4])
-		out={
-			"camera_angle_x":angle_x,
-			"camera_angle_y":angle_y,
-			"fl_x":fl_x,
-			"fl_y":fl_y,
-			"k1":k1,
-			"k2":k2,
-			"p1":p1,
-			"p2":p2,
-			"cx":cx,
-			"cy":cy,
-			"w":w,
-			"h":h,
-			"aabb_scale":AABB_SCALE,"frames":[]
-		}
-
 		up=np.zeros(3)
 		for line in f:
 			line=line.strip()
 			if line[0]=="#":
 				continue
 			i=i+1
-			if i < SKIP_EARLY*2:
+			if i < skip_early*num_line_per_frame:
 				continue
-			if  i%2==1 :
+			if  (i-1)%num_line_per_frame==0 :
 				elems=line.split(" ") # 1-4 is quat, 5-7 is trans, 9 is filename
 				filename = elems[9].split('/')[-1]
-				#name = str(PurePosixPath(Path(IMAGE_FOLDER, elems[9])))
+				#name = str(PurePosixPath(Path(img_path, elems[9])))
 				# why is this requireing a relitive path while using ^
-				image_rel = os.path.relpath(IMAGE_FOLDER)
+				image_rel = os.path.relpath(img_path)
 				name = str(f"./images/{filename}")
 				print(filename)
 				b=sharpness(os.path.join(image_rel, filename))
@@ -256,57 +262,123 @@ def colmap2nerf_invoke(img_path):
 				t = tvec.reshape([3,1])
 				m = np.concatenate([np.concatenate([R, t], 1), bottom], 0)
 				c2w = np.linalg.inv(m)
-				c2w[0:3,2] *= -1 # flip the y and z axis
+				# flip the y and z axis
+				c2w[0:3,2] *= -1 
 				c2w[0:3,1] *= -1
-				c2w=c2w[[1,0,2,3],:] # swap y and z
+				# swap y and z
+				c2w=c2w[[1,0,2,3],:]
 				c2w[2,:] *= -1 # flip whole world upside down
 
 				up += c2w[0:3,1]
 
 				frame={"file_path":name,"sharpness":b,"transform_matrix": c2w}
-				out["frames"].append(frame)
-	nframes = len(out["frames"])
+				img_dict["frames"].append(frame)
+	
+	nframes = len(img_dict["frames"])
+
+	# rotate up vector to be z-axis [0,0,1]
 	up = up / np.linalg.norm(up)
-	print("up vector was ", up)
-	R=rotmat(up,[0,0,1]) # rotate up vector to [0,0,1]
+	print("find the original up vector was: ", up)
+	R=rotmat(up,[0,0,1]) 
 	R=np.pad(R,[0,1])
 	R[-1,-1]=1
+	print(f"rotate up vector to be z-axis [0,0,1]...")
+	for f in img_dict["frames"]:
+		f["transform_matrix"]=np.matmul(R,f["transform_matrix"])
 
-
-	for f in out["frames"]:
-		f["transform_matrix"]=np.matmul(R,f["transform_matrix"]) # rotate up to be the z axis
-
-	# find a central point they are all looking at
+	# find a central point the cameras are all looking at and center all camera poses around it
 	print("computing center of attention...")
 	totw=0
 	totp=[0,0,0]
-	for f in out["frames"]:
+	for f in img_dict["frames"]:
 		mf=f["transform_matrix"][0:3,:]
-		for g in out["frames"]:
+		for g in img_dict["frames"]:
 			mg=g["transform_matrix"][0:3,:]
 			p,w=closest_point_2_lines(mf[:,3],mf[:,2],mg[:,3],mg[:,2])
 			if w>0.01:
 				totp+=p*w
 				totw+=w
 	totp/=totw
-	print(totp) # the cameras are looking at totp
-	for f in out["frames"]:
+	print("find the center of attention: ", totp)
+	print(f"center all camera poses to the center of attention...")
+	for f in img_dict["frames"]:
 		f["transform_matrix"][0:3,3]-=totp
 
+	# scale all camera poses to "nerf sized"
 	avglen=0.
-	for f in out["frames"]:
+	for f in img_dict["frames"]:
 		avglen+=np.linalg.norm(f["transform_matrix"][0:3,3])
 	avglen/=nframes
-	print("avg camera distance from origin ", avglen)
-	for f in out["frames"]:
-		f["transform_matrix"][0:3,3]*=4./avglen     # scale to "nerf sized"
+	print("find avg camera distance from origin ", avglen)
+	print(f"scale all camera poses to 'nerf sized'...")
+	for f in img_dict["frames"]:
+		f["transform_matrix"][0:3,3]*=4./avglen
 
-	for f in out["frames"]:
+	# convert the transform matrix to list
+	for f in img_dict["frames"]:
 		f["transform_matrix"]=f["transform_matrix"].tolist()
-	print(nframes,"frames")
-	print(f"writing {OUT_PATH}")
+	print(f"Finish processing {nframes} frames in total in the img_dict.")
+	return img_dict
+
+
+def colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path="transforms.json"):
+	args = parse_args()
+	img_path = img_path[:-1] if img_path.endswith('/') else img_path
+	sv_path = '/'.join(img_path.split('/')[:-1])
+	args.images = img_path
+	args.colmap_matcher = "exhaustive"
+	args.run_colmap = True
+	args.text = sv_path + '/' + args.text
+	args.colmap_db = sv_path + '/' + args.colmap_db
+
+
+	img_path=args.images
+	TEXT_FOLDER=sv_path + '/colmap_text'
+	OUT_PATH= os.path.join(sv_path, json_path)
+
+	# Generate colmap_sparse/, colmap_text/ and colmap.db
+	if os.path.exists(OUT_PATH):
+		return
+	if args.video_in != "":
+		run_ffmpeg(args)
+	if args.run_colmap and not os.path.exists(os.path.join(TEXT_FOLDER,"cameras.txt")):
+		run_colmap(args, warning=False)
+	
+	# Generate transforms.json
+	print(f"outputting to {OUT_PATH}...")
+	#Obtain camera intrinsics
+	cam_intrinsics = obtain_camera_intrinsics_from_txt(TEXT_FOLDER, aabb_scale=int(args.aabb_scale))
+	# Create output dictionary
+	out = copy.deepcopy(cam_intrinsics)
+	# Obtain image dictionary
+	img_dict = obtain_img_dict_from_txt(img_path, TEXT_FOLDER, img_txt_path,num_line_per_frame=2, skip_early=int(args.skip_early))
+	out["frames"] = img_dict["frames"]
+	# Write json file
+	print(f"Writing json file to {OUT_PATH}")
 	with open(OUT_PATH, "w") as outfile:
 		json.dump(out, outfile, indent=2)
+
+
+def optitrack2nerf_invoke(img_path, obj_dir, img_txt_path="images.txt", json_path="transforms.json"):
+    
+	args = parse_args()
+	OUT_PATH = os.path.join(obj_dir, json_path)
+	img_path = os.path.join(obj_dir, 'images')
+
+	print(f"outputting to {OUT_PATH}...")
+	# Obtain camera intrinsics
+	cam_intrinsics = obtain_camera_intrinsics_from_txt(obj_dir, aabb_scale=int(args.aabb_scale))
+	# Create output dictionary
+	out = copy.deepcopy(cam_intrinsics)
+	# Obtain image dictionary
+	img_dict = obtain_img_dict_from_txt(img_path, obj_dir, img_txt_path, num_line_per_frame=1, skip_early=int(args.skip_early))
+	out["frames"] = img_dict["frames"]
+	# Write json file
+	print(f"Writing json file to {OUT_PATH}")
+	with open(OUT_PATH, "w") as outfile:
+		json.dump(out, outfile, indent=2)
+
+
 
 
 if __name__ == "__main__":
@@ -317,9 +389,9 @@ if __name__ == "__main__":
 		run_colmap(args)
 	AABB_SCALE=int(args.aabb_scale)
 	SKIP_EARLY=int(args.skip_early)
-	IMAGE_FOLDER=args.images
+	img_path=args.images
 	TEXT_FOLDER=args.text
-	OUT_PATH=args.out
+	OUT_PATH=args.json_path
 	print(f"outputting to {OUT_PATH}...")
 	with open(os.path.join(TEXT_FOLDER,"cameras.txt"), "r") as f:
 		angle_x=math.pi/2
@@ -367,7 +439,7 @@ if __name__ == "__main__":
 
 	print(f"camera:\n\tres={w,h}\n\tcenter={cx,cy}\n\tfocal={fl_x,fl_y}\n\tfov={fovx,fovy}\n\tk={k1,k2} p={p1,p2} ")
 
-	with open(os.path.join(TEXT_FOLDER,"images.txt"), "r") as f:
+	with open(os.path.join(TEXT_FOLDER, args.img_txt_path), "r") as f:
 		i=0
 		bottom = np.array([0,0,0,1.]).reshape([1,4])
 		out={
@@ -396,9 +468,9 @@ if __name__ == "__main__":
 				continue
 			if  i%2==1 :
 				elems=line.split(" ") # 1-4 is quat, 5-7 is trans, 9 is filename
-				#name = str(PurePosixPath(Path(IMAGE_FOLDER, elems[9])))
+				#name = str(PurePosixPath(Path(img_path, elems[9])))
 				# why is this requireing a relitive path while using ^
-				image_rel = os.path.relpath(IMAGE_FOLDER)
+				image_rel = os.path.relpath(img_path)
 				name = str(f"./{image_rel}/{elems[9]}")
 				b=sharpness(name)
 				print(name, "sharpness=",b)

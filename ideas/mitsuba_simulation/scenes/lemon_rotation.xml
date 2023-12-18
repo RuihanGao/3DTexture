@@ -1,0 +1,67 @@
+<scene version="2.1.0">
+
+<!-- Defaults, these can be set via the command line: -Darg=value -->
+
+	<default name="spp" value="4096"/>
+	<default name="resx" value="1920"/>
+	<default name="resy" value="1080"/>
+
+<!-- Camera and Rendering Parameters -->
+
+	<!-- <integrator type="path" name="elm0">
+		<integer name="max_depth" value="5"/>
+		<integer name="rr_depth" value="5"/>
+		<boolean name="hide_emitters" value="false"/>
+	</integrator> -->
+
+ 	<integrator type="aov">
+        <string name="aovs" value="dd.y:depth,nn:sh_normal"/>
+        <integrator type="path"/>
+    </integrator>
+	
+	<sensor type="perspective" name="elm2">
+		<string name="fov_axis" value="x"/>
+		<float name="fov" value="24.906678"/>
+		<float name="principal_point_offset_x" value="0.000000"/>
+		<float name="principal_point_offset_y" value="-0.000000"/>
+		<float name="near_clip" value="0.100000"/>
+		<float name="far_clip" value="110.000000"/>
+		<transform name="to_world">
+			<rotate x="1" angle="89.97867182370021"/>
+			<rotate y="1" angle="-1.3562508132521567"/>
+			<rotate z="1" angle="177.12295174562854"/>
+			<translate value="-2.682484 -144.891464 2.212377"/>
+		</transform>
+		<sampler type="independent" name="sampler">
+			<integer name="sample_count" value="$spp"/>
+		</sampler>
+		<film type="hdrfilm" name="film">
+			<integer name="width" value="$resx"/>
+			<integer name="height" value="$resy"/>
+		</film>
+	</sensor>
+
+<!-- Materials -->
+
+	<bsdf type="twosided" id="default-bsdf" name="default-bsdf">
+		<bsdf type="diffuse" name="bsdf"/>
+	</bsdf>
+
+<!-- Emitters -->
+
+	<emitter type="point" name="elm1">
+		<point name="position" x="4.076245307922363" y="5.903861999511719" z="-160.48414611816406"/>
+		<rgb value="74.166206 74.166206 74.166206" name="intensity"/>
+	</emitter>
+
+<!-- Shapes -->
+
+	<shape type="ply" name="elm4">
+		<string name="filename" value="meshes/lemon.ply"/>
+		<boolean name="face_normals" value="true"/>
+		<ref id="default-bsdf" name="bsdf"/>
+	</shape>
+
+<!-- Volumes -->
+
+</scene>

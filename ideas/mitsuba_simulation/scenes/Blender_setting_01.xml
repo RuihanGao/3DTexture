@@ -1,0 +1,75 @@
+<scene version="2.1.0">
+
+<!-- Defaults, these can be set via the command line: -Darg=value -->
+
+	<default name="spp" value="256"/>
+	<default name="resx" value="256"/>
+	<default name="resy" value="256"/>
+
+<!-- Camera and Rendering Parameters -->
+
+
+	<!-- <integrator type="path" name="elm0">
+		<integer name="max_depth" value="5"/>
+		<integer name="rr_depth" value="5"/>
+		<boolean name="hide_emitters" value="false"/>
+	</integrator> -->
+
+ 	<integrator type="aov">
+        <string name="aovs" value="dd.y:depth,nn:sh_normal"/>
+        <integrator type="path"/>
+    </integrator>
+
+	<sensor type="perspective" name="elm1">
+		<string name="fov_axis" value="x"/>
+		<float name="fov" value="45.161901"/>
+		<float name="principal_point_offset_x" value="0.000000"/>
+		<float name="principal_point_offset_y" value="-0.000000"/>
+		<float name="near_clip" value="0.01"/>
+		<float name="far_clip" value="50.0"/>
+		<transform name="to_world">
+			<rotate x="1" angle="-89.3654301192598"/>
+			<rotate y="1" angle="1.6004968838679317"/>
+			<rotate z="1" angle="-179.59390928166405"/>
+			<translate value="-0.015944 -0.033846 0.038266"/>
+		</transform>
+		<sampler type="independent" name="sampler">
+			<integer name="sample_count" value="$spp"/>
+			<integer name="seed" value="0"/>
+		</sampler>
+		<film type="hdrfilm" name="film">
+			<integer name="width" value="$resx"/>
+			<integer name="height" value="$resy"/>
+			<rfilter type="box" name="rfilter"/>
+		</film>
+	</sensor>
+
+<!-- Materials -->
+
+	<bsdf type="blendbsdf" id="mat-_unnamed_6" name="mat-_unnamed_6">
+		<float name="weight" value="0.500000"/>
+		<bsdf type="twosided" name="bsdf1">
+			<bsdf type="diffuse" name="bsdf">
+				<rgb value="0.570068 0.043013 0.044371" name="reflectance"/>
+			</bsdf>
+		</bsdf>
+		<bsdf type="twosided" name="bsdf2">
+			<bsdf type="diffuse" name="bsdf">
+				<rgb value="0.000000 0.000000 0.000000" name="reflectance"/>
+			</bsdf>
+		</bsdf>
+	</bsdf>
+
+<!-- Emitters -->
+
+
+<!-- Shapes -->
+
+	<shape type="ply" name="elm3">
+		<string name="filename" value="meshes/_unnamed_5.ply"/>
+		<ref id="mat-_unnamed_6" name="bsdf"/>
+	</shape>
+
+<!-- Volumes -->
+
+</scene>
