@@ -86,6 +86,7 @@ class CameraPoseVisualizer:
         plt.title(plt_title)
         if save_plot:
             assert save_path is not None, 'Please specify the path to save the plot'
+            print(f"Save plot to {save_path}")
             plt.savefig(save_path, dpi=dpi)
         if show_plot:
             plt.show()
