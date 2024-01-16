@@ -16,7 +16,7 @@ import os.path as osp
 MIVOS_PATH='/data/ruihan/projects/NeRF-Texture/thirdparty/MiVOS/' # 'PATH_TO_MIVOS' # https://github.com/hkchengrex/MiVOS
 sys.path.append(MIVOS_PATH)
 from interactive_invoke import seg_video
-from colmap2nerf import colmap2nerf_invoke, optitrack2nerf_invoke
+from colmap2nerf import colmap2nerf_invoke, optitrack2nerf_invoke, create_gelsight_dict_from_txt_and_img_dict_params
 
 
 def Laplacian(img):
@@ -155,7 +155,9 @@ if __name__ == '__main__':
     use_optitrack = True
     remove_blur = True
     no_mask = False
-    process_poses = True # True # Option to run optitrack2nerf_invoke or colmap2nerf_invoke to get json file. Set to false for the second pass where we only need to remove inaccurate mask images
+    process_poses = False # True # Option to run optitrack2nerf_invoke or colmap2nerf_invoke to get json file. Set to false for the second pass where we only need to remove inaccurate mask images
+    process_gelsight_poses = True # Option to process gelsight poses. Given camera poses and tf saved in img_dict_params.json, we can convert original gelsight poses stored in .txt file to .json format for NeRF training
+
     use_masked_images = True # use masked images for NeRF training. In that case, rename the folder "masked_imaes" to "images" and rename "images" to "unmasked_images"
     
     # 2024.01.04 In custom dataset, we rename the folder containing all images as "camera_images". 
@@ -231,8 +233,10 @@ if __name__ == '__main__':
         print('Masking images with masks ...')
         msked_path, rename_maskimages = mask_images(img_path, msk_path, no_mask=no_mask)
 
-    json_path = "transforms_optitrack.json" if use_optitrack else "transforms_colmap.json"
+    
     # Step 4. Process poses and output transforms.json, where the coordinates follow NeRF convention
+    json_path = "transforms_optitrack.json" if use_optitrack else "transforms_colmap.json"
+    img_dict_params_path="img_dict_params.json"
     if process_poses:
         if os.path.exists(os.path.join(obj_dir, json_path)):
             # delete the previous json file
@@ -241,11 +245,19 @@ if __name__ == '__main__':
         # RH: if you use optitrack data, we need to update transforms.py accordingly.  remove noisy frames, rename clean frames, and change file format from .jpg to .png
         if use_optitrack:
             print(f"Running optitrack2nerf_invoke")
-            optitrack2nerf_invoke(img_path, obj_dir=obj_dir, img_txt_path="images_optitrack.txt" if remove_blur else "images_all.txt", json_path=json_path)
+            optitrack2nerf_invoke(img_path, obj_dir=obj_dir, img_txt_path="images_optitrack.txt" if remove_blur else "images_all.txt", json_path=json_path, img_dict_params_path=img_dict_params_path)
 
         else:
             print('Running COLMAP ...')
-            colmap2nerf_invoke(img_path, img_txt_path="images_colmap.txt", json_path=json_path)
+            colmap2nerf_invoke(img_path, img_txt_path="images_colmap.txt", json_path=json_path, img_dict_params_path=img_dict_params_path)
+        
+        if process_gelsight_poses:
+            gelsight_dict = create_gelsight_dict_from_txt_and_img_dict_params(obj_dir, gelsight_txt_path="gelsight_images_all.txt", img_dict_params_path=img_dict_params_path)
+            # Note: Unlike camera poses, we don't have camera intrinsics for gelsight. Therefore, we only save the poses in the .json file.
+            gelsight_json_path = "transforms_gelsight.json"
+            with open(os.path.join(obj_dir, gelsight_json_path), 'w') as f:
+                json.dump(gelsight_dict, f, indent=4)
+
 
     # (Optionally) Step 5. Rename masked and unmasked pathes
     if use_masked_images and rename_maskimages:
@@ -259,7 +271,7 @@ if __name__ == '__main__':
 
     # Step 6. after the first round of running this script,
     # manually filter out the images that have inaccurate mask in the second pass (manually pick the index by visually inspecting the mask folder)
-    inaccurate_mask_index_list = [24, 26, 27, 32, 33, 34, 137, 191, 192, 226, 231, 232, 233, 234, 235, 243, 244, 245, 246, 247, 248, 260] # [ 60, 62, 63, 64, 84, 86] 
+    inaccurate_mask_index_list = [] # [24, 26, 27, 32, 33, 34, 137, 191, 192, 226, 231, 232, 233, 234, 235, 243, 244, 245, 246, 247, 248, 260] # [ 60, 62, 63, 64, 84, 86] 
     if len(inaccurate_mask_index_list) > 0:
         print(f'Removing inaccurate mask images for frames {inaccurate_mask_index_list} ...')
         inaccurate_mask_dir = os.path.join(obj_dir, 'inaccurate_mask_images')

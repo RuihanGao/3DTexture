@@ -218,7 +218,7 @@ def obtain_camera_intrinsics_from_txt(cam_txt_folder, cam_txt_path="cameras.txt"
 	return cam_intrinsics
 
 
-def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt", num_line_per_frame=2, skip_early=0):
+def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt", num_line_per_frame=2, skip_early=0, return_img_dict_params=False):
 	"""
 	Process images.txt to obtain camera poses
 	
@@ -275,6 +275,7 @@ def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt"
 				img_dict["frames"].append(frame)
 	
 	nframes = len(img_dict["frames"])
+	img_dict_params = {} # save necessary parameters to reproduce the transforms for gelsight poses
 
 	# rotate up vector to be z-axis [0,0,1]
 	up = up / np.linalg.norm(up)
@@ -283,6 +284,7 @@ def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt"
 	R=np.pad(R,[0,1])
 	R[-1,-1]=1
 	print(f"rotate up vector to be z-axis [0,0,1]...")
+	img_dict_params["R"] = R.tolist()
 	for f in img_dict["frames"]:
 		f["transform_matrix"]=np.matmul(R,f["transform_matrix"])
 
@@ -301,6 +303,7 @@ def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt"
 	totp/=totw
 	print("find the center of attention: ", totp)
 	print(f"center all camera poses to the center of attention...")
+	img_dict_params["totp"] = totp.tolist()
 	for f in img_dict["frames"]:
 		f["transform_matrix"][0:3,3]-=totp
 
@@ -311,6 +314,7 @@ def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt"
 	avglen/=nframes
 	print("find avg camera distance from origin ", avglen)
 	print(f"scale all camera poses to 'nerf sized'...")
+	img_dict_params["avglen"] = avglen
 	for f in img_dict["frames"]:
 		f["transform_matrix"][0:3,3]*=4./avglen
 
@@ -318,10 +322,85 @@ def obtain_img_dict_from_txt(img_path, img_txt_folder, img_txt_path="images.txt"
 	for f in img_dict["frames"]:
 		f["transform_matrix"]=f["transform_matrix"].tolist()
 	print(f"Finish processing {nframes} frames in total in the img_dict.")
+
+	if return_img_dict_params:
+		return img_dict, img_dict_params
 	return img_dict
 
 
-def colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path="transforms.json"):
+def create_gelsight_dict_from_txt_and_img_dict_params(gelsight_txt_folder, gelsight_txt_path="gelsight_images_all.txt", num_line_per_frame=1, img_dict_params_path=None):
+	"""
+	Given gelsight poses in txt file and transforms done for img_dict, apply the same transforms to gelsight poses and return a gelsight_dict.
+
+	Required parameters to reproduce the transforms (stored in img_dict_params):
+	* rotate up vector to be z-axis [0,0,1] - R
+	* center of attention - totp
+	* scale all camera poses to "nerf sized" - avglen
+
+	"""
+	# load img_dict_params
+	assert img_dict_params_path is not None, "img_dict_params_path is required to reproduce the transforms."
+	with open(os.path.join(gelsight_txt_folder, img_dict_params_path), "r") as f:
+		img_dict_params = json.load(f)
+	for k, v in img_dict_params.items():
+		if isinstance(v, list):
+			img_dict_params[k] = np.array(v)
+	
+	# create gelsight_dict
+	gelsight_dict = {'frames': []}
+	# compute the transformation matrix to get the c2w matrix
+	with open(os.path.join(gelsight_txt_folder, gelsight_txt_path), "r") as f:
+		i = 0
+		bottom = np.array([0,0,0,1.]).reshape([1,4])
+		for line in f:
+			line = line.strip()
+			if line[0] == "#":
+				continue
+			i = i + 1
+			if (i-1) % num_line_per_frame == 0:
+				elems = line.split(" ") # 1-4 is quat, 5-7 is trans, 9 is filename
+				filename = elems[9].split('/')[-1]
+				# image_rel = os.path.relpath(gelsight_img_path)
+				name = str(f"./gelsight_images/{filename}")
+				qvec = np.array(tuple(map(float, elems[1:5])))
+				tvec = np.array(tuple(map(float, elems[5:8])))
+				R = qvec2rotmat(-qvec)
+				t = tvec.reshape([3,1])
+				m = np.concatenate([np.concatenate([R, t], 1), bottom], 0)
+				c2w = np.linalg.inv(m)
+				# flip the y and z axis
+				c2w[0:3,2] *= -1 
+				c2w[0:3,1] *= -1
+				# swap y and z
+				c2w=c2w[[1,0,2,3],:]
+				c2w[2,:] *= -1 # flip whole world upside down
+				frame={"file_path": name, "transform_matrix": c2w}
+				gelsight_dict["frames"].append(frame)
+
+	nframes = len(gelsight_dict["frames"])
+
+	# reproduce the transforms done for "nerf sized" camera poses
+
+	# rotate up vector to be z-axis [0,0,1]
+	for f in gelsight_dict["frames"]:
+		f["transform_matrix"]=np.matmul(img_dict_params["R"], f["transform_matrix"])
+
+	# find a central point the cameras are all looking at and center all camera poses around it
+	for f in gelsight_dict["frames"]:
+		f["transform_matrix"][0:3,3] -= img_dict_params["totp"]
+
+	# scale all camera poses to "nerf sized"
+	for f in gelsight_dict["frames"]:
+		f["transform_matrix"][0:3,3] *= 4./img_dict_params["avglen"]
+	
+	# convert the transform matrix to list
+	for f in gelsight_dict["frames"]:
+		f["transform_matrix"]=f["transform_matrix"].tolist()
+	print(f"Finish processing {nframes} frames in total in the gelsight_dict.")
+	return gelsight_dict
+
+
+def colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path="transforms.json", img_dict_params_path="img_dict_params.json"):
 	args = parse_args()
 	img_path = img_path[:-1] if img_path.endswith('/') else img_path
 	sv_path = '/'.join(img_path.split('/')[:-1])
@@ -351,15 +430,20 @@ def colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path="transform
 	# Create output dictionary
 	out = copy.deepcopy(cam_intrinsics)
 	# Obtain image dictionary
-	img_dict = obtain_img_dict_from_txt(img_path, TEXT_FOLDER, img_txt_path,num_line_per_frame=2, skip_early=int(args.skip_early))
+	img_dict, img_dict_params = obtain_img_dict_from_txt(img_path, TEXT_FOLDER, img_txt_path, num_line_per_frame=2, skip_early=int(args.skip_early), return_img_dict_params=True)
 	out["frames"] = img_dict["frames"]
 	# Write json file
 	print(f"Writing json file to {OUT_PATH}")
 	with open(OUT_PATH, "w") as outfile:
 		json.dump(out, outfile, indent=2)
+	
+	# Save img_dict_params
+	img_dict_params_path = os.path.join(sv_path, img_dict_params_path)
+	with open(img_dict_params_path, "w") as outfile:
+		json.dump(img_dict_params, outfile, indent=2)
 
 
-def optitrack2nerf_invoke(img_path, obj_dir, img_txt_path="images.txt", json_path="transforms.json"):
+def optitrack2nerf_invoke(img_path, obj_dir, img_txt_path="images.txt", json_path="transforms.json", img_dict_params_path="img_dict_params.json"):
     
 	args = parse_args()
 	OUT_PATH = os.path.join(obj_dir, json_path)
@@ -371,12 +455,17 @@ def optitrack2nerf_invoke(img_path, obj_dir, img_txt_path="images.txt", json_pat
 	# Create output dictionary
 	out = copy.deepcopy(cam_intrinsics)
 	# Obtain image dictionary
-	img_dict = obtain_img_dict_from_txt(img_path, obj_dir, img_txt_path, num_line_per_frame=1, skip_early=int(args.skip_early))
+	img_dict, img_dict_params = obtain_img_dict_from_txt(img_path, obj_dir, img_txt_path, num_line_per_frame=1, skip_early=int(args.skip_early), return_img_dict_params=True)
 	out["frames"] = img_dict["frames"]
 	# Write json file
 	print(f"Writing json file to {OUT_PATH}")
 	with open(OUT_PATH, "w") as outfile:
 		json.dump(out, outfile, indent=2)
+	
+	# Save img_dict_params
+	img_dict_params_path = os.path.join(obj_dir, img_dict_params_path)
+	with open(img_dict_params_path, "w") as outfile:
+		json.dump(img_dict_params, outfile, indent=2)
 
 
 
