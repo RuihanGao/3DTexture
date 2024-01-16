@@ -142,6 +142,8 @@ def min_line_dist_center(rays_o, rays_d):
 class NeRFDataset:
     def __init__(self, opt, device, type='train', downscale=1, n_test=10, normalize=True, optimize_camera=False, max_data_num=np.inf, **kwargs):
         super().__init__()
+
+        print(f"Initialize NeRFDataset with type: {type}")
         
         self.opt = opt
         self.device = device
@@ -214,6 +216,7 @@ class NeRFDataset:
 
             self.poses = []
             self.images = None
+            print(f"Creating test images using pose interpolation... n_test = {n_test}")
             for i in range(n_test + 1):
                 ratio = np.sin(((i / n_test) - 0.5) * np.pi) * 0.5 + 0.5
                 pose = np.eye(4, dtype=np.float32)
@@ -265,19 +268,19 @@ class NeRFDataset:
                 self.images.append(image)
                 self.f_paths.append(f_path)
 
-        
         self.poses = np.stack(self.poses, axis=0)
         if self.normalize:
             self.poses, _ = normalize_cps(self.poses, scale=1.2)
         # check_poses(poses)
         self.poses = self.poses[:min(self.max_data_num, len(self.poses))]
-        self.images = self.images[:min(self.max_data_num, len(self.images))]
-        self.f_paths = self.f_paths[:min(self.max_data_num, len(self.f_paths))]
+        if self.images is not None:
+            # in the case of creating test data from interpolated poses, we don't have ground truth images and f_paths
+            self.images = self.images[:min(self.max_data_num, len(self.images))]
+            self.f_paths = self.f_paths[:min(self.max_data_num, len(self.f_paths))]
 
         if 'plane_transform' in kwargs.keys() and kwargs['plane_transform'] is not None:
             plane_transform = kwargs['plane_transform']
             self.poses = np.einsum('ab,nbc->nac', plane_transform, self.poses)
-
         self.poses = torch.from_numpy(self.poses)
         # calculate mean radius of all camera poses
         self.radius = self.poses[:, :3, 3].norm(dim=-1).mean(0).item()
@@ -297,7 +300,7 @@ class NeRFDataset:
                 dtype = torch.half
             else:
                 dtype = torch.float
-        self.images = self.images.to(dtype)
+            self.images = self.images.to(dtype)
         if self.preload:
             self.poses = self.poses.to(self.device)
             self.images = self.images.to(self.device)

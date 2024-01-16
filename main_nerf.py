@@ -153,6 +153,7 @@ if __name__ == '__main__':
             valid_loader = NeRFDataset(opt, device=device, type='val', downscale=1).dataloader()
 
             max_epoch = np.ceil(opt.iters / len(train_loader)).astype(np.int32)
+            print(f"max_epoch: {max_epoch}, opt.iters: {opt.iters}, len(train_loader): {len(train_loader)}")
             trainer.train(train_loader, valid_loader, max_epoch)
 
             # also test
@@ -163,4 +164,5 @@ if __name__ == '__main__':
             else:
                 trainer.test(test_loader) # colmap doesn't have gt, so just test.
             
+            # TODO: save mesh and point cloud-
             #trainer.save_mesh(resolution=256, threshold=10)

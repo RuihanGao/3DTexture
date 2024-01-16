@@ -111,6 +111,7 @@ if __name__ == '__main__':
     
     seed_everything(opt.seed)
 
+    # Extract surface mesh
     surface_mesh_path = opt.workspace + '/meshes/surface_' + surface_type + '.obj'
     template_path='./data/template/src_model.obj'
     if not os.path.exists(surface_mesh_path):
@@ -143,6 +144,7 @@ if __name__ == '__main__':
             exit(0)
         shutil.move(result_path, surface_mesh_path)
     surface_mesh = trimesh.load_mesh(surface_mesh_path)
+    
     ply_path = opt.workspace + '/meshes/pcl.ply'
     if not os.path.exists(opt.workspace + '/meshes/h_threshold.npz'):
         print('Calculating H threshold...')

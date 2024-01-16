@@ -338,6 +338,7 @@ If you find our work useful, please consider citing:
 
 
 ## Debug log
+* To install pytorch3d use Github install `pip install "git+https://github.com/facebookresearch/pytorch3d.git"`
 * Error when running `main_nerf.py`: "TypeError: an integer is required (got type bytes) open3d" <br>
 Solution: 
 ```
@@ -353,7 +354,7 @@ sudo apt-get -y install ninja-build
 * try `main_nerf` with `--ff` flag, `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_white_lamp_base/ --workspace ./logs/my_white_lamp_base -O --bound 1.0 --scale 0.8 --dt_gamma 0  --ff --mode colmap --gui` but the program hangs at `from nerf.network_ff import NeRFNetwork` <br>
 Temporary solution: replace `--ff` by `--tcnn` flag, it works.
 
-* When try to prepare custom dataset, encounter " Could not load the Qt platform plugin "xcb" even though it is found"
+* When try to prepare custom dataset, encounter "Could not load the Qt platform plugin "xcb" even though it is found"
 Solution:
 ```
 pip uninstall opencv-python
@@ -385,7 +386,8 @@ pip install opencv-python-headless
 
 
 ## Sample command
-* Coarse shape estimation <br> 
+* Coarse shape estimation <br>
+- `CUDA_VISIBLE_DEVICES=2 python main_nerf.py --path data/dumbbell_20231207_obj_frame/ --workspace ./logs/dumbbell_20231207_obj_frame -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui` 
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_pink_dumbbell/ --workspace ./logs/my_pink_dumbbell -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_purple_apple_colmap/ --workspace ./logs/my_purple_apple_colmap -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_purple_apple_optitrack/ --workspace ./logs/my_purple_apple_optitrack -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui`
@@ -394,11 +396,11 @@ pip install opencv-python-headless
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_luffa/ --workspace ./logs/my_luffa -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui --mesh_resolution 1024`
 
 - `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_brown_box/ --workspace ./logs/my_brown_box -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui --mesh_resolution 1024`
-
-
+- `CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/dumbbell_20231207_obj_frame/ --workspace ./logs/dumbbell_20231207_obj_frame -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --gui --mesh_resolution 1024`
 
 - try to run without GUI for easier debugging from remote
-`CUDA_VISIBLE_DEVICES=0 python main_nerf.py --path data/my_brown_box/ --workspace ./logs/my_brown_box -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --mesh_resolution 1024`
+- `CUDA_VISIBLE_DEVICES=1 python main_nerf.py --path data/dumbbell_20231207_obj_frame/ --workspace ./logs/dumbbell_20231207_obj_frame -O --bound 1.0 --scale 0.8 --dt_gamma 0 --tcnn --mode colmap --mesh_resolution 1024`
+
 
 
 * Train NeRF-Texture `CUDA_VISIBLE_DEVICES=0 python main.py` <br>

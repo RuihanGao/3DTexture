@@ -589,7 +589,7 @@ class Trainer(object):
         distillation_prob = .75
         rand_x = np.random.rand()
 
-        print(f"In function train_step, check data format...")
+        # print(f"In function train_step, check data format...")
         if self.distillation and rand_x < distillation_prob:
             print(f"Run distillation process")
             xyzs, dirs, _, _, prefix = self.model.sample(rays_o, rays_d, **vars(self.opt))
@@ -603,7 +603,7 @@ class Trainer(object):
             pred_rgb = rgbs[0]
             gt_rgb = rgbs_t[0]
         else:
-            print(f"Skipped distillation, run direct supervision")
+            # print(f"Skipped distillation, run direct supervision")
             images = data['images'] # [B, N, 3/4]
             B, N, C = images.shape
             if self.opt.color_space == 'linear':
@@ -617,10 +617,10 @@ class Trainer(object):
                 gt_rgb = images[..., :3] * images[..., 3:] + bg_color * (1 - images[..., 3:])
             else:
                 gt_rgb = images
-            print(f"check gt_rgb shape {gt_rgb.shape}") # [1, 4096, 3]
-            print(f"run self.model.render...")
+            # print(f"check gt_rgb shape {gt_rgb.shape}") # [1, 4096, 3]
+            # print(f"run self.model.render...")
             outputs = self.model.render(rays_o, rays_d, staged=False, bg_color=bg_color, perturb=True, force_all_rays=False, index=index, **vars(self.opt))
-            print(f"check outputs keys {outputs.keys()}") # (['depth', 'image', 'mask', 'distortion_loss']
+            # print(f"check outputs keys {outputs.keys()}") # (['depth', 'image', 'mask', 'distortion_loss']
             pred_rgb = outputs['image']
             rgb_loss = self.criterion(pred_rgb, gt_rgb).mean(-1) # [B, N, 3] --> [B, N]
             # special case for CCNeRF's rank-residual training
@@ -996,7 +996,8 @@ class Trainer(object):
                 cv2.imwrite(path, cv2.cvtColor((pred * 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
                 cv2.imwrite(path_depth, (pred_depth * 255).astype(np.uint8))
                 pbar.update(loader.batch_size)
-        self.log(f"==> Finished Test.")
+        self.log(f"==> Finished Test. \n Saving testing results to {save_path}")
+        
     
     def train_gui(self, train_loader, step=16):
         # update grid

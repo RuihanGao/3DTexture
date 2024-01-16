@@ -447,14 +447,14 @@ if __name__ == '__main__':
     #PARAMS
     ########################################################################################
     # # if not sure just check the logs directory of NeRF-Texture
-    # DATA_NAME =  'my_brown_box' # 'my_white_lamp_base' # 'durian'   # 'test'
-    # MODEL_NAME = 'curved_grid_hash_clus_optcam_SH'
-    # data_path = f'./logs/{DATA_NAME}/field/'
+    DATA_NAME =  'durian'   # 'test'
+    MODEL_NAME = 'curved_grid_hash_clus_optcam_SH'
+    data_path = f'./logs/{DATA_NAME}/field/'
 
-    # change path here to test proof-of-concept for GelSight data
-    DATA_NAME = 'test_data'
-    MODEL_NAME = 'curved_grid_hash'
-    data_path = f'./ideas/{DATA_NAME}/field/'
+    # # change path here to test proof-of-concept for GelSight data
+    # DATA_NAME = 'test_data'
+    # MODEL_NAME = 'curved_grid_hash'
+    # data_path = f'./ideas/{DATA_NAME}/field/'
 
 
     save_path = data_path

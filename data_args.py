@@ -26,7 +26,7 @@ PATH_TO_DATASET = 'data' # 'PATH_TO_DATASET'
 # pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
 # optimize_gamma = True
 
-#########################################################
+########################################################
 # DATA_NAME = 'durian'
 # surface_type = 'coacd_remesh'
 # coacd_threshold = .1
@@ -49,7 +49,14 @@ PATH_TO_DATASET = 'data' # 'PATH_TO_DATASET'
 
 
 #########################################################
-DATA_NAME = 'my_purple_apple_colmap'
+# DATA_NAME = 'my_purple_apple_colmap'
+# surface_type = 'coacd_remesh'
+# coacd_threshold = .1
+# pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length
+
+
+# #########################################################
+DATA_NAME = 'dumbbell_20231207_obj_frame'
 surface_type = 'coacd_remesh'
 coacd_threshold = .1
 pattern_rate = 1 / 16  # scale factor of sampling patch pixel gap relative to the base mesh's average edge length

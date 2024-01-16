@@ -1,3 +1,5 @@
 # ninja log v5
 0	13614	1686676247267166959	/data/ruihan/projects/NeRF-Texture/raymarching/build/temp.linux-x86_64-cpython-38/data/ruihan/projects/NeRF-Texture/raymarching/src/bindings.o	a5578d2db126d988
 0	29974	1686676263639520405	/data/ruihan/projects/NeRF-Texture/raymarching/build/temp.linux-x86_64-cpython-38/data/ruihan/projects/NeRF-Texture/raymarching/src/raymarching.o	b3f179efac6c83f3
+71	18797	1703100834764811770	/data/ruihan/projects/NeRF-Texture/raymarching/build/temp.linux-x86_64-cpython-38/data/ruihan/projects/NeRF-Texture/raymarching/src/bindings.o	e53150c58780c98d
+71	37296	1703100853276811893	/data/ruihan/projects/NeRF-Texture/raymarching/build/temp.linux-x86_64-cpython-38/data/ruihan/projects/NeRF-Texture/raymarching/src/raymarching.o	29343a74236f6978
