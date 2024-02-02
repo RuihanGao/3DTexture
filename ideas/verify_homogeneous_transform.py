@@ -116,7 +116,7 @@ def estimate_transform(points_original, points_transformed, verbose=False):
     return Transform
 
 
-def evaluate_transform(points_original, points_transformed, Transform, alpha=0.5, plt_title=None, save_plot=False, show_plot=False, save_path="evaulate_transform.png", dpi=600, draw_idx=False, start_idx=0, idx_list=None, rank_error=False):
+def evaluate_transform(points_original, points_transformed, Transform, alpha=0.5, plt_title=None, save_plot=False, show_plot=False, save_path="evaulate_transform.png", dpi=600, draw_idx=False, start_idx=0, idx_list=None, rank_error=False, error_threshold=1.0):
     """
     Given the coordinates of a set of points in two coordinate frames, evaluate the quality of the estimated transform and plot the transformed and remapped points for visual inspection.
     """
@@ -138,12 +138,10 @@ def evaluate_transform(points_original, points_transformed, Transform, alpha=0.5
         
         # Based on the histogram plot, set a threshold of 1.0
         # find the index of points where the error exceeds the threshold
-        error_threshold = 1.0
         filtered_pts_index = np.where(errors < error_threshold)[0]
         filted_out_pts_index = np.where(errors >= error_threshold)[0]
         print(f"check shape filtered_pts_index {filtered_pts_index.shape}, filted_out_pts_index {filted_out_pts_index.shape}")
         print(f"Find {len(filtered_pts_index)} points have error smaller than threshold, filter out {len(filted_out_pts_index)} pts, index: {filted_out_pts_index} ")
-
 
 
     squared_error = np.sum(np.square(points_transformed - remapped_points), axis=1)

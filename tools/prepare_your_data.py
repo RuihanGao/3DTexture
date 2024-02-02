@@ -148,17 +148,20 @@ def rename_images(path):
 
 
 if __name__ == '__main__':
+    
     gap = 8 # default 15. change to 1 to debug my_purple_apple
     path_to_dataset = '/data/ruihan/projects/NeRF-Texture/data' # 'PARENT_FOLDER'
-    dataset_name = 'woodbox_20240112_obj_frame' # 'dumbbell_20231207_obj_frame' # 'DATASET_NAME'
+    dataset_name = 'onemarker_20240130_obj_frame' # 'woodbox_20240112_obj_frame' # 'dumbbell_20231207_obj_frame' # 'DATASET_NAME'
     input_video = False
-    use_optitrack = True
-    remove_blur = True
-    no_mask = False
-    process_poses = False # True # Option to run optitrack2nerf_invoke or colmap2nerf_invoke to get json file. Set to false for the second pass where we only need to remove inaccurate mask images
+    use_optitrack = False
+    remove_blur = True # Note: if want to remove_blur, run use_optitrack=True first, then run use_optitrack=False for colmap processing
+    no_mask = True
+    process_poses = True # Option to run optitrack2nerf_invoke or colmap2nerf_invoke to get json file. Set to false for the second pass where we only need to remove inaccurate mask images
+    remove_inaccurate_mask = False
+
     process_gelsight_poses = True # Option to process gelsight poses. Given camera poses and tf saved in img_dict_params.json, we can convert original gelsight poses stored in .txt file to .json format for NeRF training
 
-    use_masked_images = True # use masked images for NeRF training. In that case, rename the folder "masked_imaes" to "images" and rename "images" to "unmasked_images"
+    use_masked_images = False # use masked images for NeRF training. In that case, rename the folder "masked_imaes" to "images" and rename "images" to "unmasked_images"
     
     # 2024.01.04 In custom dataset, we rename the folder containing all images as "camera_images". 
     # When preparing the dataset, we make a copy from "camera_images" to "images" and then do the rest as normal. Therefore, after removing blurry images, we still have the orignal data in "camera_images" folder. Easier to delete the rest and restart.
@@ -249,12 +252,12 @@ if __name__ == '__main__':
 
         else:
             print('Running COLMAP ...')
-            colmap2nerf_invoke(img_path, img_txt_path="images_colmap.txt", json_path=json_path, img_dict_params_path=img_dict_params_path)
+            colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path=json_path, img_dict_params_path=img_dict_params_path)
         
         if process_gelsight_poses:
             gelsight_dict = create_gelsight_dict_from_txt_and_img_dict_params(obj_dir, gelsight_txt_path="gelsight_images_all.txt", img_dict_params_path=img_dict_params_path)
             # Note: Unlike camera poses, we don't have camera intrinsics for gelsight. Therefore, we only save the poses in the .json file.
-            gelsight_json_path = "transforms_gelsight.json"
+            gelsight_json_path = "transforms_gelsight.json" if use_optitrack else "transforms_gelsight_colmap.json"
             with open(os.path.join(obj_dir, gelsight_json_path), 'w') as f:
                 json.dump(gelsight_dict, f, indent=4)
 
@@ -272,7 +275,7 @@ if __name__ == '__main__':
     # Step 6. after the first round of running this script,
     # manually filter out the images that have inaccurate mask in the second pass (manually pick the index by visually inspecting the mask folder)
     inaccurate_mask_index_list = [] # [24, 26, 27, 32, 33, 34, 137, 191, 192, 226, 231, 232, 233, 234, 235, 243, 244, 245, 246, 247, 248, 260] # [ 60, 62, 63, 64, 84, 86] 
-    if len(inaccurate_mask_index_list) > 0:
+    if len(inaccurate_mask_index_list) > 0 and remove_inaccurate_mask:
         print(f'Removing inaccurate mask images for frames {inaccurate_mask_index_list} ...')
         inaccurate_mask_dir = os.path.join(obj_dir, 'inaccurate_mask_images')
         inaccurate_mask_image_dir = os.path.join(inaccurate_mask_dir, 'images')

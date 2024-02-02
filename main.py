@@ -152,7 +152,7 @@ if __name__ == '__main__':
         pcd = pcd.voxel_down_sample(voxel_size=0.01)
         scanned_ply = np.asarray(pcd.points)
         udf = np.abs(trimesh.proximity.ProximityQuery(surface_mesh).signed_distance(scanned_ply))
-        udf_07 = np.partition(udf, -int(udf.shape[0] * .3))[-int(udf.shape[0] * .3)]
+        udf_07 = np.partition(udf, -int(udf.shape[0] * .3))[-int(udf.shape[0] * .3)] # 70% percentile on the smaller value side
         h_threshold = 2 * udf_07
         np.savez(opt.workspace + '/meshes/h_threshold', h_threshold=h_threshold)
     else:
