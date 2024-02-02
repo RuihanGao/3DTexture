@@ -349,6 +349,7 @@ def create_gelsight_dict_from_txt_and_img_dict_params(gelsight_txt_folder, gelsi
 	# create gelsight_dict
 	gelsight_dict = {'frames': []}
 	# compute the transformation matrix to get the c2w matrix
+	verbose = False
 	with open(os.path.join(gelsight_txt_folder, gelsight_txt_path), "r") as f:
 		i = 0
 		bottom = np.array([0,0,0,1.]).reshape([1,4])
@@ -362,20 +363,38 @@ def create_gelsight_dict_from_txt_and_img_dict_params(gelsight_txt_folder, gelsi
 				filename = elems[9].split('/')[-1]
 				# image_rel = os.path.relpath(gelsight_img_path)
 				name = str(f"./gelsight_images/{filename}")
+				if int(elems[0] == 4):
+					verbose = True
 				qvec = np.array(tuple(map(float, elems[1:5])))
 				tvec = np.array(tuple(map(float, elems[5:8])))
+				if verbose: print("qvec: ", qvec, "tvec: ", tvec)
 				R = qvec2rotmat(-qvec)
+				if verbose: print("R: ", R)
 				t = tvec.reshape([3,1])
 				m = np.concatenate([np.concatenate([R, t], 1), bottom], 0)
+				if verbose: print("m: ", m)
 				c2w = np.linalg.inv(m)
+				if verbose: print("c2w: ", c2w)
 				# flip the y and z axis
 				c2w[0:3,2] *= -1 
 				c2w[0:3,1] *= -1
+				if verbose: print(f"after fipping y and z axis: \n{c2w}")
 				# swap y and z
 				c2w=c2w[[1,0,2,3],:]
 				c2w[2,:] *= -1 # flip whole world upside down
+				if verbose: print(f"after swapping y and z: \n{c2w}")
 				frame={"file_path": name, "transform_matrix": c2w}
 				gelsight_dict["frames"].append(frame)
+				if verbose:
+					
+					c2w = np.matmul(img_dict_params["R"], c2w)
+					print(f"matmul R \{c2w}")
+					c2w[0:3,3] -= img_dict_params["totp"]
+					print(f"center all camera poses to the center of attention: \{c2w}")
+					c2w[0:3,3] *= 4./img_dict_params["avglen"]
+					print(f"scale all camera poses to 'nerf sized': \{c2w}")
+					raise ValueError("verbose")
+
 
 	nframes = len(gelsight_dict["frames"])
 

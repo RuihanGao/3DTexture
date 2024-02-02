@@ -153,7 +153,7 @@ if __name__ == '__main__':
     path_to_dataset = '/data/ruihan/projects/NeRF-Texture/data' # 'PARENT_FOLDER'
     dataset_name = 'onemarker_20240130_obj_frame' # 'woodbox_20240112_obj_frame' # 'dumbbell_20231207_obj_frame' # 'DATASET_NAME'
     input_video = False
-    use_optitrack = False
+    use_optitrack = True
     remove_blur = True # Note: if want to remove_blur, run use_optitrack=True first, then run use_optitrack=False for colmap processing
     no_mask = True
     process_poses = True # Option to run optitrack2nerf_invoke or colmap2nerf_invoke to get json file. Set to false for the second pass where we only need to remove inaccurate mask images
