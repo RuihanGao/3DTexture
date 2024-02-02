@@ -255,6 +255,7 @@ if __name__ == '__main__':
             colmap2nerf_invoke(img_path, img_txt_path="images.txt", json_path=json_path, img_dict_params_path=img_dict_params_path)
         
         if process_gelsight_poses:
+            print(f"process_gelesight_poses is set to True. Processing gelsight poses ...")
             gelsight_dict = create_gelsight_dict_from_txt_and_img_dict_params(obj_dir, gelsight_txt_path="gelsight_images_all.txt", img_dict_params_path=img_dict_params_path)
             # Note: Unlike camera poses, we don't have camera intrinsics for gelsight. Therefore, we only save the poses in the .json file.
             gelsight_json_path = "transforms_gelsight.json" if use_optitrack else "transforms_gelsight_colmap.json"
